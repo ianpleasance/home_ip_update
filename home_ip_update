@@ -1,0 +1,68 @@
+#!/bin/bash
+is_root=`id | grep 'uid=0'`
+if [ ! "$is_root" ]
+ then
+  echo 'This script must be root!'
+  exit 1
+fi
+
+# Edit these
+dnsname="PUT_YOUR_DYNAMIC_DNS_HOSTNAME_HERE"
+dnsserver="PUT_YOUR_DYNAMIC_DNS_DNSSERVER_HERE"
+visdnsname="PUT_YOUR_VISUAL_DNS_HOSTNAME_HERE"
+emailto="PUT_YOU@YOURDOMAIN.COM_HERE"
+emailfrom="YOURNAME <YOU@YOURDOMAIN.COM>"
+
+using_mailx=0  # Set this to 1 if "mail" actually is "mailx"
+
+# Set the firewall update script to the iptables or EC2 SG variant
+fwupdate='/root/fw_update_iptables -q'
+#fwupdate='/root/fw_update_ec2'
+
+currfile='/root/home_ip_update.curr'
+lastfile='/root/home_ip_update.last'
+hosts='/etc/hosts'
+
+# Do a DNS lookup of the Dynamic DNS name
+do_update=0
+curr_ip=`host ${dnsname} ${dnsserver} 2>/dev/null | grep "${dnsname} has address" | awk '{print $4}' | head -1`
+if [ ! "$curr_ip" ]
+ then
+  exit 0
+fi
+
+# If this is the first run, or it changed, then update the firewall
+if [ ! -f $lastfile ]
+ then 
+  do_update=1
+ else
+  last_ip=`cat $lastfile | awk -F'=' '{print $2}'`
+  if [ "$last_ip" != "$curr_ip" ]
+   then
+    do_update=1
+  fi
+fi
+
+echo ${curr_ip} >${currfile}
+
+if [ "$do_update" -eq 1 ]
+ then
+# Update /etc/hosts
+  cp -p ${hosts} ${hosts}.save
+  cat ${hosts}.save | sed "s!${last_ip}!${curr_ip}!g" >${hosts}
+  chmod 644 ${hosts}
+# Run firewall update script
+  ${fwupdate} >/dev/null 2>&1
+# Save the last IP address to stop the next run re-updating it
+  echo "${dnsname}=${curr_ip}" >$lastfile
+# Email out a notification
+  hostname=`/bin/hostname`
+  if [ "$using_mailx" -eq 0 ]
+    then
+      echo "${hostname} changed IP for ${visdnsname} from ${last_ip} to ${curr_ip}" | mail -s "IP address change for ${visdnsname} (on ${hostname})" -r "${emailfrom}" ${emailto}
+    else
+      echo "${hostname} changed IP for ${visdnsname} from ${last_ip} to ${curr_ip}" | mail -s "IP address change for ${visdnsname} (on ${hostname})" -a "From: ${emailfrom}" ${emailto}
+  fi
+
+fi
+

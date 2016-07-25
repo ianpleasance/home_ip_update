@@ -1,0 +1,40 @@
+#!/usr/bin/perl
+
+$quiet = 0;
+$argcount = $#ARGV;
+for ($argnum = 0; $argnum <= $argcount; $argnum++)
+ {
+  if ($ARGV[$argnum] == "-q") { $quiet = 1; }
+ }
+
+$varfile = '/etc/iptables.firewall.rules.var';
+$realfile = '/etc/iptables.firewall.rules';
+
+if (!$quiet)
+ { system("vi $varfile"); }
+
+$currfile='/root/home_ip_update.curr';
+open(my $fh, "<$currfile") or die "Could not open $currfile";
+$homeip=<$fh>; chomp($homeip); $homeip =~ s/\n//g;
+close($fh);
+
+$var{'HOME'} = "${homeip}/32";
+$var{'MYOFFICE'} = '1.2.3.4/32';
+
+# Read /etc/iptables.firewall.rules.var and replace the variable markers with IP addresses,
+# saving the output in /etc/iptables.firewall.rules
+open(IN,"<$varfile");
+open(OUT,">$realfile");
+while ($inln = <IN>)
+ {
+  while (my ($key, $val) = each(%var))
+   {
+    $inln =~ s/\$$key/$val/g;
+   }
+  print OUT "$inln";
+ }
+# Load new iptables ruleset
+system("/sbin/iptables-restore < $realfile");
+
+exit(0);
+

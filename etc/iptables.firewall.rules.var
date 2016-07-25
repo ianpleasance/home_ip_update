@@ -1,0 +1,62 @@
+*filter
+
+#  Allow all loopback (lo0) traffic and drop all traffic to 127/8 that doesn't use lo0
+-A INPUT -i lo -j ACCEPT
+-A INPUT -d 127.0.0.0/8 -j REJECT
+
+#  Accept all established inbound connections
+-A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+#  Allow all outbound traffic - you can modify this to only allow certain traffic
+-A OUTPUT -j ACCEPT
+
+# Allow ports 80/443 from home and my office
+-A INPUT -p tcp --dport 80 -s $HOME -j ACCEPT
+-A INPUT -p tcp --dport 443 -s $HOME -j ACCEPT
+-A INPUT -p tcp --dport 80 -s $MYOFFICE -j ACCEPT
+-A INPUT -p tcp --dport 443 -s $MYOFFICE -j ACCEPT
+
+# Allow SSH connections (note ports 22 and 21 in case 22 is blocked)
+# Allow SSH from home
+-A INPUT -p tcp -m state --state NEW -s $HOME --dport 22 -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -s $HOME --dport 21 -j ACCEPT
+# Allow SSH from my office
+-A INPUT -p tcp -m state --state NEW -s $MYOFFICE --dport 22 -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -s $MYOFFICE --dport 21 -j ACCEPT
+
+# Allow VNC from home
+-A INPUT -p tcp -m state --state NEW -s $HOME --dport 5900 -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -s $HOME --dport 5901 -j ACCEPT
+
+# Allow JConsole queries to Java processes from home
+-A INPUT -p tcp -m state --state NEW -s $HOME --dport 7199 -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -s $HOME --dport 9999 -j ACCEPT
+
+# Allow JMX to Jenkins (8099) from home
+-A INPUT -p tcp --dport 8099 -s $HOME -j ACCEPT
+
+# Allow JMX to Cassandra (7199) from home
+-A INPUT -p tcp --dport 7199 -s $HOME -j ACCEPT
+# Allow connections to Cassandra from home
+#  9062=Client, 9160=Thrift, 7000=Inter-node, 7001-SSL Inter-node
+-A INPUT -p tcp --dport 9160 -s $HOME -j ACCEPT
+-A INPUT -p tcp --dport 9062 -s $HOME -j ACCEPT
+-A INPUT -p tcp --dport 7000 -s $HOME -j ACCEPT
+-A INPUT -p tcp --dport 7001 -s $HOME -j ACCEPT
+
+#  Allow ping
+#-A INPUT -p icmp -j ACCEPT
+# Home
+-A INPUT -p icmp -s $HOME -j ACCEPT
+# My office
+-A INPUT -p icmp -s $MYOFFICE -j ACCEPT
+
+#  Log iptables denied calls
+-A INPUT -m limit --limit 5/min -j LOG --log-prefix "iptables denied: " --log-level 7
+
+#  Drop all other inbound - default deny unless explicitly allowed policy
+-A INPUT -j DROP
+-A FORWARD -j DROP
+
+COMMIT
+

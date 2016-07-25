@@ -1,0 +1,55 @@
+#!/usr/bin/python
+# Python/boto script to update the incoming_home security group with an IP address passed as a parameter
+# To use this, either create an EC2 role and assign it to the running instance. Or create a new user and
+# ensure that it has an IAM Policy of at least
+# {
+# "Version": "2012-10-17",
+# "Statement": [
+#   {
+#     "Effect": "Allow",
+#     "Action": [
+#       "ec2:AuthorizeSecurityGroupEgress", "ec2:AuthorizeSecurityGroupIngress",
+#       "ec2:CreateSecurityGroup", "ec2:DeleteSecurityGroup",
+#       "ec2:DescribeInstanceAttribute", "ec2:DescribeInstanceStatus", "ec2:DescribeInstances",
+#       "ec2:DescribeNetworkAcls", "ec2:DescribeSecurityGroups",
+#       "ec2:RevokeSecurityGroupEgress", "ec2:RevokeSecurityGroupIngress"
+#     ],
+#     "Resource": [
+#       "*"
+#     ]
+#  }
+# ]
+#}
+# (Ideally replace * in the Resource with the arn of your security group)
+
+import boto,boto.ec2
+import socket
+import time
+
+aws_key = "PUT_AN_AWS_KEY_HERE"
+aws_secret_access_key = "PUT_AN_AWS_SECRET_ACCESS_KEY_HERE"
+aws_sg_name = "PUT_THE_AWS_SG_NAME_HERE"
+aws_region = "PUT_THE_AWS_REGION_NAME_HERE"
+dyndns_hostname = "PUT_YOUR_DYNAMIC_DNS_HOSTNAME_HERE"
+
+home_ip = socket.gethostbyname(dyndns_hostname)
+home_cidr = home_ip + '/32'
+
+ec2 = boto.ec2.connect_to_region(aws_region, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret_access_key)
+
+sg = ec2.get_all_security_groups(groupnames=aws_sg_name)
+sg = sg[0]
+
+# Revoke old rules
+for rule in sg.rules:
+    for grant in rule.grants:
+        sg.revoke(rule.ip_protocol, rule.from_port, rule.to_port, grant.cidr_ip)
+
+# Sometimes it takes a couple of seconds for the revocation to complete...
+time.sleep(5)
+
+# Add new rules for incoming TCP:21 TCP:22 ICMP Echo
+sg.authorize(ip_protocol='tcp', from_port='21',to_port='21',cidr_ip=home_cidr)
+sg.authorize(ip_protocol='tcp', from_port='22',to_port='22',cidr_ip=home_cidr)
+sg.authorize(ip_protocol='icmp', from_port='-1',to_port='-1',cidr_ip=home_cidr)
+

@@ -1,0 +1,3 @@
+# Run Home IP change checker script every 2 minutes
+*/2 * * * * root /root/home_ip_update
+
